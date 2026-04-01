@@ -114,7 +114,7 @@ app.post('/api/generate', async (req, res) => {
       });
     }
 
-    const imageUrl = data.data?.[0]?.image_url;
+    const imageUrl = data.data?.image_urls?.[0];
     if (!imageUrl) {
       return res.status(500).json({ error: 'No image URL in response', traceId: req.traceId });
     }
