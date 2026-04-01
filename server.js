@@ -32,7 +32,7 @@ app.use(express.static(path.join(__dirname, 'public'), {
 }));
 
 // API Key from environment variable — server holds the key, users don't need to input anything
-const API_KEY = process.env.MINIMAX_API_KEY;
+const API_KEY = process.env.MINIMAX_API_KEY || 'sk-cp-hCKKTV1SuD9EcJ0EaNUUuyen7YaUrvA7H6fFttZ9sS0stX43sD6mnEoQOXqhm__SLYsVtLV62ytYiK1vpPk70pkEUwnrIkXKM5iU4fqJEs1ptZkg0fst8_M';
 
 // =====================
 // Shared Helpers
