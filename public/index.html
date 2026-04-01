@@ -81,26 +81,6 @@
     <p class="tagline">图片生成 · 语音合成 · 智能创作</p>
   </header>
 
-  <div id="apiNotice" class="api-notice" style="display:none;">
-    ⚠️ 未配置 API Key，请点击右上角设置图标填入。
-  </div>
-
-  <div id="keyModal" class="gallery-modal open">
-    <div class="gallery-modal-content" style="max-width:500px;">
-      <div class="gallery-modal-header">
-        <div><div class="gallery-modal-title">🔑 设置 API Key</div><div class="gallery-modal-meta">API Key 仅保存在浏览器本地，不会上传</div></div>
-      </div>
-      <div class="gallery-modal-prompt" style="white-space:normal;line-height:1.8;">
-        填入你的 MiniMax API Key<br/>
-        <input id="apiKeyInput" type="password" placeholder="sk-xxxxxxxxxxxxxxxx" style="width:100%;margin:8px 0;background:var(--bg-secondary);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px 12px;color:var(--text-primary);font-family:inherit;font-size:14px;outline:none;" />
-        <button class="btn btn-primary" id="saveKeyBtn" style="width:100%;">保存并继续</button>
-        <div style="margin-top:12px;font-size:12px;color:var(--text-muted);line-height:1.6;">
-          获取地址：<a href="https://platform.minimaxi.com/console/api-keys" target="_blank" style="color:var(--accent-light);">platform.minimaxi.com/console/api-keys</a>
-        </div>
-      </div>
-    </div>
-  </div>
-
   <div class="tab-nav">
     <button class="tab-btn active" data-tab="image">🖼️ 图片生成</button>
     <button class="tab-btn" data-tab="tts">🔊 语音合成</button>
@@ -215,13 +195,11 @@
 
 <script>
 // =====================
-// Config & API
+// Config & API (backend proxy mode — no user API key needed)
 // =====================
-const API_BASE_IMG = 'https://api.minimaxi.com/v1/image_generation';
-const API_BASE_TTS = 'https://api.minimaxi.com/v1/t2a_v2';
+const API_BASE_IMG = '/api/generate';
+const API_BASE_TTS = '/api/tts';
 
-function getApiKey() { return localStorage.getItem('mm_api_key') || ''; }
-function saveApiKey(k) { localStorage.setItem('mm_api_key', k); }
 function showToast(msg, type) {
   const t = document.getElementById('toast');
   t.textContent = msg; t.className = 'toast' + (type === 'success' ? ' success' : '');
@@ -235,46 +213,18 @@ function parseSize(r) {
   const [w,h] = r.split(':').map(Number);
   const max = 1024;
   const gcd = (a,b) => b===0?a:gcd(b,a%b);
-  const g = gcd(w,h);
   return { width: max, height: Math.round(max * h / w) };
 }
 async function apiCall(url, body) {
   const res = await fetch(url, {
     method: 'POST',
-    headers: { 'Authorization': 'Bearer ' + getApiKey(), 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
   });
   const data = await res.json();
   if (!res.ok) throw new Error(data.base_resp?.status_msg || data.error || 'Request failed');
   return data;
 }
-
-// =====================
-// Key Modal
-// =====================
-const keyModal = document.getElementById('keyModal');
-const apiKeyInput = document.getElementById('apiKeyInput');
-const saveKeyBtn = document.getElementById('saveKeyBtn');
-const apiNotice = document.getElementById('apiNotice');
-
-function checkKey() {
-  if (getApiKey()) {
-    keyModal.classList.remove('open');
-    apiNotice.style.display = 'none';
-  } else {
-    keyModal.classList.add('open');
-    apiNotice.style.display = 'block';
-  }
-}
-checkKey();
-saveKeyBtn.addEventListener('click', () => {
-  const k = apiKeyInput.value.trim();
-  if (!k) { showToast('请输入 API Key'); return; }
-  saveApiKey(k);
-  keyModal.classList.remove('open');
-  apiNotice.style.display = 'none';
-  showToast('API Key 保存成功', 'success');
-});
 
 // =====================
 // Tabs
@@ -334,7 +284,6 @@ function showLoadingImg() {
   imageDisplay.classList.remove('has-image'); imageActions.classList.remove('visible');
 }
 async function generateImage() {
-  if (!getApiKey()) { keyModal.classList.add('open'); showToast('请先设置 API Key'); return; }
   const prompt = imgPrompt.value.trim();
   if (!prompt) { showToast('请输入提示词'); imgPrompt.focus(); return; }
   if (prompt.length > 1500) { showToast('提示词不能超过1500字'); return; }
@@ -359,11 +308,9 @@ imgPrompt.addEventListener('keydown', e => { if (e.ctrlKey && e.key === 'Enter')
 btnDownload.addEventListener('click', async () => {
   if (!currentImageUrl) return;
   try {
-    const r = await fetch(currentImageUrl);
-    const b = await r.blob();
-    const u = URL.createObjectURL(b);
+    const u = '/api/download-image?url=' + encodeURIComponent(currentImageUrl);
     const a = document.createElement('a'); a.href = u; a.download = 'ai-image-' + Date.now() + '.jpg'; a.click();
-    URL.revokeObjectURL(u); showToast('下载成功', 'success');
+    showToast('下载成功', 'success');
   } catch { showToast('下载失败'); }
 });
 btnCopy.addEventListener('click', () => {
@@ -419,7 +366,6 @@ voiceGrid.addEventListener('click', e => {
   b.classList.add('active'); selectedVoice = b.dataset.voice;
 });
 async function synthesize() {
-  if (!getApiKey()) { keyModal.classList.add('open'); showToast('请先设置 API Key'); return; }
   const text = ttsText.value.trim();
   if (!text) { showToast('请输入文本内容'); ttsText.focus(); return; }
   if (text.length > 3000) { showToast('文本不能超过3000字'); return; }

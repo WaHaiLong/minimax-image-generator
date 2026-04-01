@@ -31,7 +31,7 @@ app.use(express.static(path.join(__dirname, 'public'), {
   }
 }));
 
-// API Key from environment variable
+// API Key from environment variable — server holds the key, users don't need to input anything
 const API_KEY = process.env.MINIMAX_API_KEY;
 
 // =====================
@@ -63,7 +63,7 @@ app.get('/api/key-status', (req, res) => {
 });
 
 // =====================
-// API: Image Generation
+// API: Image Generation (proxy to MiniMax)
 // =====================
 app.post('/api/generate', async (req, res) => {
   const { prompt, width, height } = req.body;
@@ -127,7 +127,7 @@ app.post('/api/generate', async (req, res) => {
 });
 
 // =====================
-// API: Text-to-Speech
+// API: Text-to-Speech (proxy to MiniMax)
 // =====================
 app.post('/api/tts', async (req, res) => {
   const { text, voice_id, speed, model } = req.body;
@@ -187,6 +187,24 @@ app.post('/api/tts', async (req, res) => {
   } catch (error) {
     console.error('[%s] TTS error:', req.traceId, formatError(error));
     res.status(error.response?.status || 500).json({ error: formatError(error), traceId: req.traceId });
+  }
+});
+
+// =====================
+// API: Download Image (proxy to avoid CORS)
+// =====================
+app.get('/api/download-image', async (req, res) => {
+  const { url } = req.query;
+  if (!url) return res.status(400).json({ error: 'url is required' });
+  try {
+    const response = await axios.get(url, { responseType: 'arraybuffer', timeout: 60000 });
+    const contentType = response.headers['content-type'] || 'image/jpeg';
+    res.set('Content-Type', contentType);
+    res.set('Content-Disposition', 'attachment; filename="ai-image.jpg"');
+    res.send(response.data);
+  } catch (error) {
+    console.error('[%s] Download error:', genTraceId(), error.message);
+    res.status(500).json({ error: 'Download failed' });
   }
 });
 
