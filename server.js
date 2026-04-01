@@ -32,7 +32,7 @@ app.use(express.static(path.join(__dirname, 'public'), {
 }));
 
 // API Key from environment variable — server holds the key, users don't need to input anything
-const API_KEY = process.env.MINIMAX_API_KEY || 'sk-cp-hCKKTV1SuD9EcJ0EaNUUuyen7YaUrvA7H6fFttZ9sS0stX43sD6mnEoQOXqhm__SLYsVtLV62ytYiK1vpPk70pkEUwnrIkXKM5iU4fqJEs1ptZkg0fst8_M';
+const API_KEY = process.env.MINIMAX_API_KEY;
 
 // =====================
 // Shared Helpers
@@ -197,11 +197,15 @@ app.get('/api/download-image', async (req, res) => {
   const { url } = req.query;
   if (!url) return res.status(400).json({ error: 'url is required' });
   try {
-    const response = await axios.get(url, { responseType: 'arraybuffer', timeout: 60000 });
+    const response = await axios.get(url, {
+      responseType: 'stream',
+      timeout: 60000,
+      maxRedirects: 5,
+    });
     const contentType = response.headers['content-type'] || 'image/jpeg';
     res.set('Content-Type', contentType);
     res.set('Content-Disposition', 'attachment; filename="ai-image.jpg"');
-    res.send(response.data);
+    response.data.pipe(res);
   } catch (error) {
     console.error('[%s] Download error:', genTraceId(), error.message);
     res.status(500).json({ error: 'Download failed' });
