@@ -308,8 +308,13 @@ imgPrompt.addEventListener('keydown', e => { if (e.ctrlKey && e.key === 'Enter')
 btnDownload.addEventListener('click', async () => {
   if (!currentImageUrl) return;
   try {
-    const u = '/api/download-image?url=' + encodeURIComponent(currentImageUrl);
-    const a = document.createElement('a'); a.href = u; a.download = 'ai-image-' + Date.now() + '.jpg'; a.click();
+    const r = await fetch('/api/download-image?url=' + encodeURIComponent(currentImageUrl));
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error);
+    const a = document.createElement('a');
+    a.href = d.dataUrl;
+    a.download = 'ai-image-' + Date.now() + '.jpg';
+    a.click();
     showToast('下载成功', 'success');
   } catch { showToast('下载失败'); }
 });

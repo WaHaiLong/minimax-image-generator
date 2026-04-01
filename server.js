@@ -198,14 +198,14 @@ app.get('/api/download-image', async (req, res) => {
   if (!url) return res.status(400).json({ error: 'url is required' });
   try {
     const response = await axios.get(url, {
-      responseType: 'stream',
+      responseType: 'arraybuffer',
       timeout: 60000,
       maxRedirects: 5,
     });
     const contentType = response.headers['content-type'] || 'image/jpeg';
-    res.set('Content-Type', contentType);
-    res.set('Content-Disposition', 'attachment; filename="ai-image.jpg"');
-    response.data.pipe(res);
+    const base64 = Buffer.from(response.data).toString('base64');
+    const dataUrl = `data:${contentType};base64,${base64}`;
+    res.json({ dataUrl, contentType });
   } catch (error) {
     console.error('[%s] Download error:', genTraceId(), error.message);
     res.status(500).json({ error: 'Download failed' });
