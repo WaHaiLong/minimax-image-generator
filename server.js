@@ -1,6 +1,8 @@
 const express = require('express');
 const axios = require('axios');
 const path = require('path');
+const { rateLimit } = require('express-rate-limit');
+const helmet = require('helmet');
 require('dotenv').config();
 
 const app = express();
@@ -15,6 +17,44 @@ const MAX_IMAGE_DIM_MIN = 256;
 
 // Middleware
 app.use(express.json());
+app.use(helmet({
+  crossOriginResourcePolicy: { policy: 'cross-origin' },
+}));
+
+// Rate limiting
+const globalLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 200,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many requests, please try again later.' },
+});
+
+const generateLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Image generation rate limit exceeded.' },
+});
+
+const ttsLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'TTS rate limit exceeded.' },
+});
+
+const downloadLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Download rate limit exceeded.' },
+});
+
+app.use(globalLimiter);
 
 // Request traceId middleware
 app.use((req, res, next) => {
@@ -65,7 +105,7 @@ app.get('/api/key-status', (req, res) => {
 // =====================
 // API: Image Generation (proxy to MiniMax)
 // =====================
-app.post('/api/generate', async (req, res) => {
+app.post('/api/generate', generateLimiter, async (req, res) => {
   const { prompt, width, height } = req.body;
 
   if (!prompt || typeof prompt !== 'string' || !prompt.trim()) {
@@ -129,7 +169,7 @@ app.post('/api/generate', async (req, res) => {
 // =====================
 // API: Text-to-Speech (proxy to MiniMax)
 // =====================
-app.post('/api/tts', async (req, res) => {
+app.post('/api/tts', ttsLimiter, async (req, res) => {
   const { text, voice_id, speed, model } = req.body;
 
   if (!text || typeof text !== 'string' || !text.trim()) {
@@ -193,16 +233,37 @@ app.post('/api/tts', async (req, res) => {
 // =====================
 // API: Download Image (proxy to avoid CORS)
 // =====================
-app.get('/api/download-image', async (req, res) => {
+app.get('/api/download-image', downloadLimiter, async (req, res) => {
   const { url } = req.query;
   if (!url) return res.status(400).json({ error: 'url is required' });
+
+  // SSRF protection: validate URL scheme and hostname
+  let parsedUrl;
+  try {
+    parsedUrl = new URL(url);
+  } catch {
+    return res.status(400).json({ error: 'Invalid URL format' });
+  }
+  const allowedProtocols = ['http:', 'https:'];
+  if (!allowedProtocols.includes(parsedUrl.protocol)) {
+    return res.status(400).json({ error: 'Only HTTP/HTTPS URLs are allowed' });
+  }
+  const blockedHosts = ['localhost', '127.0.0.1', '0.0.0.0', '::1', '169.254.169.254'];
+  if (blockedHosts.includes(parsedUrl.hostname) || parsedUrl.hostname.startsWith('192.168.') || parsedUrl.hostname.startsWith('10.') || parsedUrl.hostname.startsWith('172.')) {
+    return res.status(400).json({ error: 'Access to internal/private networks is not allowed' });
+  }
+
   try {
     const response = await axios.get(url, {
       responseType: 'arraybuffer',
       timeout: 60000,
       maxRedirects: 5,
+      headers: { 'Accept': 'image/*' },
     });
     const contentType = response.headers['content-type'] || 'image/jpeg';
+    if (!contentType.startsWith('image/')) {
+      return res.status(400).json({ error: 'URL does not point to an image' });
+    }
     const base64 = Buffer.from(response.data).toString('base64');
     const dataUrl = `data:${contentType};base64,${base64}`;
     res.json({ dataUrl, contentType });
@@ -232,6 +293,16 @@ app.get('/api/tts/voices', async (req, res) => {
       error: formatError(error) || 'Failed to get voices',
       traceId: req.traceId,
     });
+  }
+});
+
+// =====================
+// Global Error Handler
+// =====================
+app.use((err, req, res, _next) => {
+  console.error('[%s] Unhandled error:', req.traceId || 'unknown', err.message);
+  if (!res.headersSent) {
+    res.status(500).json({ error: 'Internal server error', traceId: req.traceId });
   }
 });
 
