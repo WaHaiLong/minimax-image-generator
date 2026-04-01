@@ -222,7 +222,7 @@ async function apiCall(url, body) {
     body: JSON.stringify(body),
   });
   const data = await res.json();
-  if (!res.ok) throw new Error(data.base_resp?.status_msg || data.error || 'Request failed');
+  if (!res.ok) throw new Error(data.error || 'Request failed');
   return data;
 }
 
@@ -292,7 +292,7 @@ async function generateImage() {
   showLoadingImg();
   try {
     const data = await apiCall(API_BASE_IMG, { model: 'image-01', prompt, width: size.width, height: size.height });
-    const url = data.data?.image_urls?.[0];
+    const url = data.image_url;
     if (!url) throw new Error('No image URL returned');
     renderImage(url);
   } catch(err) {
@@ -378,7 +378,7 @@ async function synthesize() {
       voice_setting: { voice_id: selectedVoice, speed: Math.min(2.0, Math.max(0.5, parseFloat(ttsSpeed.value) || 1.0)) },
       output_format: 'url',
     });
-    const url = data.data?.audio;
+    const url = data.audio_url;
     if (!url) throw new Error('No audio URL returned');
     currentAudioUrl = url;
     ttsTextPreview.textContent = text;

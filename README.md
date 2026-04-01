@@ -1,5 +1,8 @@
 # MiniMax AI 生成器
 
+[![CI/CD](https://github.com/huaangdou-afk/minimax-image-generator/actions/workflows/ci.yml/badge.svg)](https://github.com/huaangdou-afk/minimax-image-generator/actions/workflows/ci.yml)
+[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/huaangdou-afk/minimax-image-generator)
+
 集图片生成、语音合成、提示词画廊于一体的 AI 创作工具。**部署后用户可直接使用，无需输入任何 Key。**
 
 ## 功能
@@ -86,7 +89,7 @@ npm start
 
 ## 部署到 Render（免费，无需信用卡）
 
-[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/WaHaiLong/minimax-image-generator)
+[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/huaangdou-afk/minimax-image-generator)
 
 ### 方案一：一键部署（推荐）
 
@@ -96,7 +99,7 @@ npm start
 
 1. 登录 [Render](https://render.com/)（可用 GitHub 账号）
 2. 点击 **New +** → **Blueprint**（或 Web Service）
-3. 连接你的 GitHub 仓库：`https://github.com/WaHaiLong/minimax-image-generator`
+3. 连接你的 GitHub 仓库：`https://github.com/huaangdou-afk/minimax-image-generator`
 4. 确认以下配置：
 
    | 配置项 | 值 |
