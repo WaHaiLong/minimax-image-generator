@@ -1,0 +1,86 @@
+/**
+ * Apple Design System — CSS Variables
+ * Based on docs/apple-design-spec.md
+ */
+
+:root {
+  /* ── Colors ── */
+  --apple-bg:          #FFFFFF;
+  --apple-bg-elevated: #F5F5F7;
+  --apple-bg-card:     #FFFFFF;
+  --apple-border:      rgba(0, 0, 0, 0.06);
+  --apple-border-soft:#E5E5EA;
+
+  --apple-text:        #1D1D1F;
+  --apple-text-secondary: #86868B;
+  --apple-text-placeholder: #C7C7CC;
+
+  --apple-blue:        #0071E3;
+  --apple-blue-hover:  #0077ED;
+  --apple-blue-light:   rgba(0, 113, 227, 0.1);
+  --apple-green:       #34C759;
+  --apple-red:         #FF3B30;
+  --apple-orange:      #FF9500;
+  --apple-gray:        #AEAEB2;
+  --apple-gray-light:  #F5F5F7;
+  --apple-gray-medium: #E5E5EA;
+
+  /* ── Typography ── */
+  --apple-font:        -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", sans-serif;
+  --apple-font-zh:     "PingFang SC", "Noto Sans SC", sans-serif;
+  --apple-font-mono:    "SF Mono", "Menlo", "Monaco", monospace;
+
+  --apple-text-xs:   11px;
+  --apple-text-sm:   13px;
+  --apple-text-base: 15px;
+  --apple-text-lg:   17px;
+  --apple-text-xl:   20px;
+  --apple-text-2xl:  24px;
+  --apple-text-3xl:  28px;
+
+  --apple-leading-tight:  1.25;
+  --apple-leading-normal: 1.5;
+  --apple-leading-loose:  1.7;
+
+  --apple-tracking-tight:  -0.02em;
+  --apple-tracking-normal:  0;
+  --apple-tracking-wide:    0.01em;
+
+  /* ── Spacing ── */
+  --apple-space-1:  4px;
+  --apple-space-2:  8px;
+  --apple-space-3:  12px;
+  --apple-space-4:  16px;
+  --apple-space-5:  20px;
+  --apple-space-6:  24px;
+  --apple-space-8:  32px;
+  --apple-space-10: 40px;
+  --apple-space-12: 48px;
+  --apple-space-16: 64px;
+
+  /* ── Radii ── */
+  --apple-radius-sm:  6px;
+  --apple-radius-md:  10px;
+  --apple-radius-lg:  12px;
+  --apple-radius-xl:  16px;
+  --apple-radius-2xl: 20px;
+  --apple-radius-pill: 9999px;
+
+  /* ── Shadows ── */
+  --apple-shadow-sm:  0 1px 3px rgba(0, 0, 0, 0.06);
+  --apple-shadow-md:  0 2px 12px rgba(0, 0, 0, 0.08);
+  --apple-shadow-lg:  0 8px 32px rgba(0, 0, 0, 0.12);
+  --apple-shadow-focus: 0 0 0 4px rgba(0, 113, 227, 0.15);
+
+  /* ── Transitions ── */
+  --apple-ease:      cubic-bezier(0.25, 0.1, 0.25, 1);
+  --apple-ease-out:  cubic-bezier(0, 0, 0.2, 1);
+  --apple-ease-in:   cubic-bezier(0.4, 0, 1, 1);
+  --apple-duration:  0.2s;
+  --apple-duration-slow: 0.35s;
+
+  /* ── Layout ── */
+  --apple-nav-height: 56px;
+  --apple-content-max: 680px;
+  --apple-sidebar-width: 0px; /* removed */
+}

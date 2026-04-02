@@ -2,7 +2,7 @@
 # Pre-commit hook: run ESLint and tests before committing
 
 echo "Running ESLint..."
-npx eslint --ignore-path .gitignore .
+npx eslint .
 ESLINT_EXIT=$?
 
 if [ $ESLINT_EXIT -ne 0 ]; then

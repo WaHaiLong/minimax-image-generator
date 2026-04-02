@@ -3,7 +3,13 @@
 // =====================
 
 import { showToast, escapeHtml, parseSize } from './utils.js';
-import { generateImage, synthesize, downloadUrl } from './api.js';
+import { generateImage, synthesize } from './api.js';
+import * as constants from './constants.js';
+
+const { MAX_IMAGE_PROMPT, MAX_TTS_CHARS, MAX_HISTORY } = constants;
+
+// Expose constants globally for the inline script in index.html
+window.APP_CONSTANTS = { MAX_IMAGE_PROMPT, MAX_TTS_CHARS, MAX_HISTORY };
 
 // =====================
 // State
@@ -80,7 +86,7 @@ function showLoadingImg() {
 async function doGenerateImage() {
   const prompt = imgPrompt.value.trim();
   if (!prompt) { showToast('请输入提示词'); imgPrompt.focus(); return; }
-  if (prompt.length > 1500) { showToast('提示词不能超过1500字'); return; }
+  if (prompt.length > MAX_IMAGE_PROMPT) { showToast('提示词不能超过' + MAX_IMAGE_PROMPT + '字'); return; }
 
   const size = parseSize(imgSize.value);
   btnGenerateImg.disabled = true;
@@ -107,7 +113,7 @@ async function doGenerateImage() {
 }
 
 imgPrompt.addEventListener('input', () => {
-  imgCharCount.textContent = imgPrompt.value.length + ' / 1500';
+  imgCharCount.textContent = imgPrompt.value.length + ' / ' + MAX_IMAGE_PROMPT;
 });
 
 presetTags.addEventListener('click', e => {
@@ -116,7 +122,7 @@ presetTags.addEventListener('click', e => {
   document.querySelectorAll('.preset-tag').forEach(x => x.classList.remove('active'));
   t.classList.add('active');
   imgPrompt.value = t.dataset.prompt;
-  imgCharCount.textContent = imgPrompt.value.length + ' / 1500';
+  imgCharCount.textContent = imgPrompt.value.length + ' / ' + MAX_IMAGE_PROMPT;
   imgPrompt.focus();
 });
 
@@ -166,7 +172,7 @@ btnDelete.addEventListener('click', () => {
 
 function addToHistory(url) {
   imgHistory.unshift(url);
-  if (imgHistory.length > 30) imgHistory = imgHistory.slice(0, 30);
+  if (imgHistory.length > MAX_HISTORY) imgHistory = imgHistory.slice(0, MAX_HISTORY);
   localStorage.setItem('imgGenHistory', JSON.stringify(imgHistory));
   renderImgHistory();
 }
@@ -223,7 +229,7 @@ let selectedVoice = 'male-qn-qingse';
 })();
 
 ttsText.addEventListener('input', () => {
-  ttsCharCount.textContent = ttsText.value.length + ' / 3000';
+  ttsCharCount.textContent = ttsText.value.length + ' / ' + MAX_TTS_CHARS;
 });
 
 ttsSpeed.addEventListener('input', () => {
@@ -241,7 +247,7 @@ voiceGrid.addEventListener('click', e => {
 async function doSynthesize() {
   const text = ttsText.value.trim();
   if (!text) { showToast('请输入文本内容'); ttsText.focus(); return; }
-  if (text.length > 3000) { showToast('文本不能超过3000字'); return; }
+  if (text.length > MAX_TTS_CHARS) { showToast('文本不能超过' + MAX_TTS_CHARS + '字'); return; }
 
   btnSynthesize.disabled = true;
   btnSynthesize.textContent = '⏳ 合成中...';
@@ -422,7 +428,7 @@ galleryGrid.addEventListener('click', e => {
   if (btn?.classList.contains('gallery-use-cn') || btn?.classList.contains('gallery-use-en')) {
     activateTab('image');
     document.getElementById('imgPrompt').value = promptToUse;
-    document.getElementById('imgCharCount').textContent = promptToUse.length + ' / 1500';
+    document.getElementById('imgCharCount').textContent = promptToUse.length + ' / ' + MAX_IMAGE_PROMPT;
     showToast('提示词已填入！', 'success');
   } else {
     currentPromptId = p.id;
@@ -452,7 +458,7 @@ modalUseCn.addEventListener('click', () => {
   activateTab('image');
   galleryModal.classList.remove('open');
   document.getElementById('imgPrompt').value = t;
-  document.getElementById('imgCharCount').textContent = t.length + ' / 1500';
+  document.getElementById('imgCharCount').textContent = t.length + ' / ' + MAX_IMAGE_PROMPT;
   showToast('中文提示词已填入！', 'success');
 });
 
@@ -462,7 +468,7 @@ modalUseEn.addEventListener('click', () => {
   activateTab('image');
   galleryModal.classList.remove('open');
   document.getElementById('imgPrompt').value = t;
-  document.getElementById('imgCharCount').textContent = t.length + ' / 1500';
+  document.getElementById('imgCharCount').textContent = t.length + ' / ' + MAX_IMAGE_PROMPT;
   showToast('英文提示词已填入！', 'success');
 });
 
