@@ -1,15 +1,18 @@
 services:
   - name: minimax-image-generator
     region: singapore
-    repo: https://github.com/WaHaiLong/minimax-image-generator
+    repo: https://github.com/huaangdou-afk/minimax-image-generator
     branch: master
     type: web
     runtime: node
     buildCommand: npm install
     startCommand: node server.js
+    healthCheckPath: /api/key-status
+    autoDeploy: true
     plan: free
+    numInstances: 1
     envVars:
       - key: MINIMAX_API_KEY
-        value: ""
+        sync: false
       - key: NODE_VERSION
         value: "18"

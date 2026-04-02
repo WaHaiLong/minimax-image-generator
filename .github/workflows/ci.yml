@@ -1,0 +1,114 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+
+env:
+  NODE_VERSION: '18'
+  RENDER_SERVICE_ID: srv-d76h342dbo4c73bjvmu0
+
+jobs:
+  ci:
+    name: CI (Lint + Test + Build)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js ${{ env.NODE_VERSION }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Run ESLint
+        run: npx eslint --ignore-path .gitignore .
+
+      - name: Check package.json completeness
+        run: |
+          node -e "
+            const pkg = require('./package.json');
+            const required = ['name','version','description','main','scripts','dependencies'];
+            const missing = required.filter(k => !pkg[k]);
+            if (missing.length > 0) { console.error('Missing:', missing.join(', ')); process.exit(1); }
+            console.log('package.json OK');
+          "
+
+      - name: Check for tests directory
+        id: has_tests
+        run: echo "exists=$(test -d tests && echo true || echo false)" >> $GITHUB_OUTPUT
+
+      - name: Run tests
+        if: steps.has_tests.outputs.exists == 'true'
+        run: npm test
+
+      - name: Run npm audit
+        run: npm audit --audit-level=high
+
+      - name: Install production dependencies
+        run: npm install --production
+
+      - name: Verify server.js syntax
+        run: node --check server.js
+
+      - name: Check critical files exist
+        run: |
+          for f in server.js public/index.html package.json; do
+            [ -f "$f" ] || { echo "ERROR: $f missing"; exit 1; }
+          done
+          echo "All critical files present"
+
+  deploy-render:
+    name: Deploy to Render
+    runs-on: ubuntu-latest
+    needs: ci
+    if: github.ref == 'refs/heads/master' && github.event_name == 'push'
+
+    steps:
+      - name: Trigger Render deployment
+        run: |
+          RESP=$(curl -s -X POST \
+            -H "Authorization: Bearer ${{ secrets.RENDER_API_KEY }}" \
+            -H "Content-Type: application/json" \
+            -d '{"clearCache": false}' \
+            "https://api.render.com/v1/services/${{ env.RENDER_SERVICE_ID }}/deploys")
+          echo "Response: $RESP"
+          DEPLOY_ID=$(echo "$RESP" | node -pe "JSON.parse(require('fs').readFileSync('/dev/stdin','utf8')).id || ''")
+          echo "deploy_id=$DEPLOY_ID" >> $GITHUB_OUTPUT
+          if [ -z "$DEPLOY_ID" ]; then echo "::error::Deploy failed"; exit 1; fi
+          echo "Triggered: $DEPLOY_ID"
+
+      - name: Wait for deployment
+        run: |
+          MAX=180; INT=10; EL=0
+          while [ $EL -lt $MAX ]; do
+            STATUS=$(curl -s -H "Authorization: Bearer ${{ secrets.RENDER_API_KEY }}" \
+              "https://api.render.com/v1/services/${{ env.RENDER_SERVICE_ID }}" | \
+              node -pe "JSON.parse(require('fs').readFileSync('/dev/stdin','utf8')).activeDeploy?.status || 'unknown'")
+            echo "[$EL/$MAX] Status: $STATUS"
+            [ "$STATUS" = "succeeded" ] && exit 0
+            [ "$STATUS" = "failed" ] && exit 1
+            sleep $INT; EL=$((EL+INT))
+          done
+          echo "::warning::Timeout, check dashboard manually"
+
+      - name: Report status
+        if: always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            github.rest.repos.createCommitStatus({
+              owner: context.repo.owner, repo: context.repo.repo,
+              sha: context.sha,
+              state: '${{ job.status }}' === 'success' ? 'success' : 'failure',
+              target_url: 'https://dashboard.render.com/web/${{ env.RENDER_SERVICE_ID }}',
+              description: 'Render deployment ' + ('${{ job.status }}' === 'success' ? 'succeeded' : 'failed'),
+              context: 'render/deploy'
+            });

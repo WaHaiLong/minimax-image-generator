@@ -1,6 +1,8 @@
 const express = require('express');
 const axios = require('axios');
 const path = require('path');
+const { rateLimit } = require('express-rate-limit');
+const helmet = require('helmet');
 require('dotenv').config();
 
 const app = express();
@@ -15,6 +17,44 @@ const MAX_IMAGE_DIM_MIN = 256;
 
 // Middleware
 app.use(express.json());
+app.use(helmet({
+  crossOriginResourcePolicy: { policy: 'cross-origin' },
+}));
+
+// Rate limiting
+const globalLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 200,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many requests, please try again later.' },
+});
+
+const generateLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Image generation rate limit exceeded.' },
+});
+
+const ttsLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'TTS rate limit exceeded.' },
+});
+
+const downloadLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Download rate limit exceeded.' },
+});
+
+app.use(globalLimiter);
 
 // Request traceId middleware
 app.use((req, res, next) => {
@@ -31,7 +71,7 @@ app.use(express.static(path.join(__dirname, 'public'), {
   }
 }));
 
-// API Key from environment variable
+// API Key from environment variable — server holds the key, users don't need to input anything
 const API_KEY = process.env.MINIMAX_API_KEY;
 
 // =====================
@@ -63,9 +103,9 @@ app.get('/api/key-status', (req, res) => {
 });
 
 // =====================
-// API: Image Generation
+// API: Image Generation (proxy to MiniMax)
 // =====================
-app.post('/api/generate', async (req, res) => {
+app.post('/api/generate', generateLimiter, async (req, res) => {
   const { prompt, width, height } = req.body;
 
   if (!prompt || typeof prompt !== 'string' || !prompt.trim()) {
@@ -127,9 +167,9 @@ app.post('/api/generate', async (req, res) => {
 });
 
 // =====================
-// API: Text-to-Speech
+// API: Text-to-Speech (proxy to MiniMax)
 // =====================
-app.post('/api/tts', async (req, res) => {
+app.post('/api/tts', ttsLimiter, async (req, res) => {
   const { text, voice_id, speed, model } = req.body;
 
   if (!text || typeof text !== 'string' || !text.trim()) {
@@ -191,6 +231,95 @@ app.post('/api/tts', async (req, res) => {
 });
 
 // =====================
+// API: Download Image (proxy to avoid CORS)
+// =====================
+app.get('/api/download-image', downloadLimiter, async (req, res) => {
+  const { url } = req.query;
+  if (!url) return res.status(400).json({ error: 'url is required', traceId: req.traceId });
+
+  // SSRF protection: validate URL scheme and hostname
+  let parsedUrl;
+  try {
+    parsedUrl = new URL(url);
+  } catch {
+    return res.status(400).json({ error: 'Invalid URL format', traceId: req.traceId });
+  }
+  const allowedProtocols = ['http:', 'https:'];
+  if (!allowedProtocols.includes(parsedUrl.protocol)) {
+    return res.status(400).json({ error: 'Only HTTP/HTTPS URLs are allowed', traceId: req.traceId });
+  }
+  const blockedHosts = ['localhost', '127.0.0.1', '0.0.0.0', '[::1]', '169.254.169.254'];
+  const hostname = parsedUrl.hostname;
+  const isBlockedHost = blockedHosts.includes(hostname);
+  const isPrivateRange = hostname.startsWith('192.168.') || hostname.startsWith('10.') || hostname.startsWith('172.');
+  if (isBlockedHost || isPrivateRange) {
+    return res.status(400).json({ error: 'Access to internal/private networks is not allowed', traceId: req.traceId });
+  }
+
+  try {
+    const response = await axios.get(url, {
+      responseType: 'arraybuffer',
+      timeout: 60000,
+      maxRedirects: 5,
+      headers: { 'Accept': 'image/*' },
+    });
+    const contentType = response.headers['content-type'] || 'image/jpeg';
+    if (!contentType.startsWith('image/')) {
+      return res.status(400).json({ error: 'URL does not point to an image', traceId: req.traceId });
+    }
+    const base64 = Buffer.from(response.data).toString('base64');
+    const dataUrl = `data:${contentType};base64,${base64}`;
+    res.json({ dataUrl, contentType });
+  } catch (error) {
+    console.error('[%s] Download error:', req.traceId || 'unknown', error.message);
+    res.status(500).json({ error: 'Download failed', traceId: req.traceId });
+  }
+});
+
+// =====================
+// API: Download TTS Audio (proxy to avoid Aliyun OSS 403)
+// =====================
+app.get('/api/tts/audio', downloadLimiter, async (req, res) => {
+  const { url } = req.query;
+  if (!url) return res.status(400).json({ error: 'url is required' });
+
+  let parsedUrl;
+  try {
+    parsedUrl = new URL(url);
+  } catch {
+    return res.status(400).json({ error: 'Invalid URL format', traceId: req.traceId });
+  }
+  const allowedProtocols = ['http:', 'https:'];
+  if (!allowedProtocols.includes(parsedUrl.protocol)) {
+    return res.status(400).json({ error: 'Only HTTP/HTTPS URLs are allowed', traceId: req.traceId });
+  }
+  const blockedHosts = ['localhost', '127.0.0.1', '0.0.0.0', '[::1]', '169.254.169.254'];
+  const hostname = parsedUrl.hostname;
+  const isBlockedHost = blockedHosts.includes(hostname);
+  const isPrivateRange = hostname.startsWith('192.168.') || hostname.startsWith('10.') || hostname.startsWith('172.');
+  if (isBlockedHost || isPrivateRange) {
+    return res.status(400).json({ error: 'Access to internal/private networks is not allowed', traceId: req.traceId });
+  }
+
+  try {
+    const response = await axios.get(url, {
+      responseType: 'arraybuffer',
+      timeout: 30000,
+      maxRedirects: 5,
+      headers: { 'Accept': 'audio/*' },
+    });
+    const contentType = response.headers['content-type'] || 'audio/mpeg';
+    if (!contentType.startsWith('audio/')) {
+      return res.status(400).json({ error: 'URL does not point to an audio file', traceId: req.traceId });
+    }
+    res.json({ dataUrl: `data:${contentType};base64,${Buffer.from(response.data).toString('base64')}`, contentType });
+  } catch (error) {
+    console.error('[%s] Audio download error:', req.traceId || 'unknown', error.message);
+    res.status(500).json({ error: 'Download failed', traceId: req.traceId });
+  }
+});
+
+// =====================
 // API: Get Available Voices
 // =====================
 app.get('/api/tts/voices', async (req, res) => {
@@ -210,6 +339,98 @@ app.get('/api/tts/voices', async (req, res) => {
       error: formatError(error) || 'Failed to get voices',
       traceId: req.traceId,
     });
+  }
+});
+
+// =====================
+// API: Style Analysis (vision model analyzes uploaded image)
+// =====================
+const analyzeStyleLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Style analysis rate limit exceeded.' },
+});
+
+app.post('/api/analyze-style', analyzeStyleLimiter, async (req, res) => {
+  if (!validateApiKey(res, req.traceId)) return;
+
+  const { imageUrl } = req.body || {};
+  if (!imageUrl || typeof imageUrl !== 'string') {
+    return res.status(400).json({ error: 'imageUrl is required', traceId: req.traceId });
+  }
+
+  // Reject internal/private URLs to prevent SSRF
+  let parsedUrl;
+  try {
+    parsedUrl = new URL(imageUrl.startsWith('data:') ? 'http://localhost' : imageUrl);
+  } catch {
+    return res.status(400).json({ error: 'Invalid imageUrl', traceId: req.traceId });
+  }
+  const blockedHosts = ['localhost', '127.0.0.1', '0.0.0.0', '[::1]', '169.254.169.254'];
+  const hostname = parsedUrl.hostname;
+  const isPrivateRange =
+    hostname.startsWith('192.168.') || hostname.startsWith('10.') || hostname.startsWith('172.');
+  if (blockedHosts.includes(hostname) || isPrivateRange) {
+    return res.status(400).json({ error: 'Access to internal/private networks is not allowed', traceId: req.traceId });
+  }
+
+  try {
+    const response = await axios.post(
+      `${API_BASE}/v1/chat/completions`,
+      {
+        model: 'MiniMax-VL-01',
+        messages: [
+          {
+            role: 'user',
+            content: [
+              { type: 'image_url', image_url: { url: imageUrl } },
+              {
+                type: 'text',
+                text: '分析这张图片的风格特点，返回5-8个风格标签（如：写实、扁平插画、水彩、国风、赛博朋克等），用逗号分隔，只需返回标签，不要其他描述。',
+              },
+            ],
+          },
+        ],
+      },
+      {
+        headers: {
+          'Authorization': `Bearer ${API_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        timeout: 30000,
+      }
+    );
+
+    const raw = response.data?.choices?.[0]?.message?.content || '';
+    const tags = raw
+      .split(/[,，]/)
+      .map(t => t.trim())
+      .filter(t => t.length > 0 && t.length <= 15)
+      .slice(0, 8);
+
+    if (tags.length === 0) {
+      return res.json({ styles: ['通用风格'], raw });
+    }
+
+    res.json({ styles: tags, raw });
+  } catch (error) {
+    console.error(`[${req.traceId}] Style analysis error:`, error.message);
+    res.status(error.response?.status || 500).json({
+      error: formatError(error) || 'Style analysis failed',
+      traceId: req.traceId,
+    });
+  }
+});
+
+// =====================
+// Global Error Handler
+// =====================
+app.use((err, req, res) => {
+  console.error('[%s] Unhandled error:', req.traceId || 'unknown', err.message);
+  if (!res.headersSent) {
+    res.status(500).json({ error: 'Internal server error', traceId: req.traceId });
   }
 });
 
